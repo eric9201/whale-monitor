@@ -15,3 +15,4 @@ Health check: `/health`
 The server binds to `0.0.0.0` and `process.env.PORT`.
 
 Important: CEX public trade feeds show aggressor buy/sell flow. They do not reveal trader identity and do not prove whether a participant opened or closed a position.
+deploy

@@ -115,62 +115,40 @@ function putBook(exchange,asset,bids,asks){books[asset][exchange]={bids,asks,ts:
 function connect(name,make){let delay=1000;const go=()=>{state[name].socket="connecting";try{const ws=make();ws.on("open",()=>{state[name].socket="connected";delay=1000});ws.on("error",e=>{state[name].error=String(e.message||e).slice(0,120);try{ws.close()}catch{}});ws.on("close",()=>{state[name].socket="reconnecting";setTimeout(go,delay);delay=Math.min(30000,delay*2)})}catch(e){state[name].error=String(e);setTimeout(go,delay)}};go()}
 function health(){let o={};for(const [k,v] of Object.entries(state)){const age=v.lastTrade?now()-v.lastTrade:null;o[k]={...v,tradeAgeMs:age,status:v.socket!=="connected"?"OFFLINE":age!==null&&age<60000?"LIVE":"NO_DATA"}}return o}
 
-// Binance 2026: connect to /public/ws, then explicitly SUBSCRIBE.
-// This follows the current USDⓈ-M live subscribe protocol and records ACK + real events.
-function binanceSubscribed(){
- let delay=1000;
- const streams=[
-  "btcusdt@aggTrade","ethusdt@aggTrade",
-  "btcusdt@depth20@100ms","ethusdt@depth20@100ms",
-  "btcusdt@forceOrder","ethusdt@forceOrder"
- ];
+// Binance aggTrade: runtime-verified direct /market raw streams.
+// Verified 2026-09-25: BOTH BTCUSDT and ETHUSDT delivered real aggTrade payloads.
+function binanceTradeRaw(A){
+ let delay=1000,sym=A.toLowerCase()+"usdt";
  const go=()=>{
-  const url="wss://fstream.binance.com/public/ws",ws=new WebSocket(url);
-  state.Binance.endpoint=url;state.Binance.socket="connecting";
-  state.Binance.subscriptionAck=false;state.Binance.subscriptionList=[];
-  state.Binance.messageCount=0;state.Binance.tradeMessageCount=0;
-  state.Binance.bookMessageCount=0;state.Binance.liqMessageCount=0;
-  ws.on("open",()=>{
-   state.Binance.socket="connected";state.Binance.openedAt=now();state.Binance.error="";delay=1000;
-   console.log("[Binance] OPEN",url);
-   ws.send(JSON.stringify({method:"SUBSCRIBE",params:streams,id:1}));
-   console.log("[Binance] SUBSCRIBE_SENT",streams.join(","));
-   setTimeout(()=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({method:"LIST_SUBSCRIPTIONS",id:2}))},1000);
-  });
+  const url=`wss://fstream.binance.com/market/ws/${sym}@aggTrade`,ws=new WebSocket(url);
+  state.Binance.tradeFeeds??={};let d=state.Binance.tradeFeeds[A]??={};Object.assign(d,{url,socket:"connecting",error:""});
+  ws.on("open",()=>{d.socket="connected";d.openedAt=now();d.error="";delay=1000;console.log(`[Binance-TRADE-${A}] OPEN`,url)});
   ws.on("message",b=>{try{
-   const j=JSON.parse(b);state.Binance.messageCount++;state.Binance.lastMessage=now();
-   if(j.id===1){
-    if(j.result===null){state.Binance.subscriptionAck=true;console.log("[Binance] SUBSCRIBE_ACK")}
-    else {state.Binance.error="SUBSCRIBE failed: "+JSON.stringify(j);console.error("[Binance]",state.Binance.error)}
-    return;
-   }
-   if(j.id===2){
-    state.Binance.subscriptionList=Array.isArray(j.result)?j.result:[];
-    console.log("[Binance] LIST_SUBSCRIPTIONS",JSON.stringify(state.Binance.subscriptionList));
-    return;
-   }
-   if(j.code!=null){state.Binance.error=`WS ${j.code}: ${j.msg}`;console.error("[Binance]",state.Binance.error);return}
-   // /ws is raw mode: event payload is the root object, not {stream,data}.
-   const x=j,A=String(x.s||x.o?.s||"").startsWith("ETH")?"ETH":"BTC";
-   if(x.e==="aggTrade"){
-    state.Binance.tradeMessageCount++;
-    if(state.Binance.tradeMessageCount===1)console.log("[Binance] FIRST_AGGTRADE",x.s,x.p,x.q);
-    putTrade("Binance",A,x.m?"SELL":"BUY",x.p,x.q,x.a,x.T);
-   }else if(x.e==="depthUpdate" || (x.lastUpdateId!=null&&Array.isArray(x.bids||x.b))){
-    state.Binance.bookMessageCount++;
-    const bids=x.b||x.bids||[],asks=x.a||x.asks||[];
-    putBook("Binance",A,bids.map(v=>[+v[0],+v[1]]),asks.map(v=>[+v[0],+v[1]]));
-   }else if(x.e==="forceOrder"){
-    state.Binance.liqMessageCount++;
-    const o=x.o;if(o)putLiq("Binance",A,o.S,+o.ap||+o.p,o.q,o.T);
-   }
-  }catch(e){state.Binance.error=String(e.message||e);console.error("[Binance] PARSE",state.Binance.error)}});
-  ws.on("error",e=>{state.Binance.error=String(e.message||e);console.error("[Binance] ERROR",state.Binance.error)});
-  ws.on("close",(code,reason)=>{state.Binance.socket="reconnecting";state.Binance.closeCode=code;state.Binance.closeReason=String(reason);console.log("[Binance] CLOSE",code,String(reason));setTimeout(go,delay);delay=Math.min(30000,delay*2)});
- };
- go();
+   const x=JSON.parse(b);if(x.e!=="aggTrade"||x.s!==A+"USDT")return;
+   d.messageCount=(d.messageCount||0)+1;d.lastMessage=now();
+   if(d.messageCount===1)console.log(`[Binance-TRADE-${A}] FIRST_AGGTRADE e=${x.e} s=${x.s} p=${x.p} q=${x.q} a=${x.a} T=${x.T} m=${x.m}`);
+   putTrade("Binance",A,x.m?"SELL":"BUY",x.p,x.q,x.a,x.T);
+  }catch(e){d.error=String(e.message||e);console.error(`[Binance-TRADE-${A}] PARSE`,d.error)}});
+  ws.on("error",e=>{d.error=String(e.message||e);console.error(`[Binance-TRADE-${A}] ERROR`,d.error)});
+  ws.on("close",(code,reason)=>{d.socket="reconnecting";console.log(`[Binance-TRADE-${A}] CLOSE`,code,String(reason));setTimeout(go,delay);delay=Math.min(30000,delay*2)});
+ };go();
 }
-binanceSubscribed();
+binanceTradeRaw("BTC");binanceTradeRaw("ETH");
+
+// Binance public market depth remains on the already-proven /public feed.
+function binancePublicRaw(label,stream,onData){
+ let delay=1000;const go=()=>{const url="wss://fstream.binance.com/public/ws/"+stream,ws=new WebSocket(url);
+  state.Binance.publicFeeds??={};let d=state.Binance.publicFeeds[label]??={};Object.assign(d,{url,socket:"connecting",error:""});
+  ws.on("open",()=>{d.socket="connected";delay=1000});
+  ws.on("message",b=>{try{let x=JSON.parse(b);d.messageCount=(d.messageCount||0)+1;d.lastMessage=now();onData(x)}catch(e){d.error=String(e.message||e)}});
+  ws.on("error",e=>d.error=String(e.message||e));
+  ws.on("close",()=>{d.socket="reconnecting";setTimeout(go,delay);delay=Math.min(30000,delay*2)});
+ };go();}
+for(const A of["BTC","ETH"]){const sym=A.toLowerCase()+"usdt";
+ binancePublicRaw(`BOOK-${A}`,`${sym}@depth20@100ms`,x=>putBook("Binance",A,(x.b||[]).map(v=>[+v[0],+v[1]]),(x.a||[]).map(v=>[+v[0],+v[1]])));
+ binancePublicRaw(`LIQ-${A}`,`${sym}@forceOrder`,x=>{const o=x.o;if(o)putLiq("Binance",A,o.S,+o.ap||+o.p,o.q,o.T)});
+}
+setInterval(()=>{let f=Object.values(state.Binance.tradeFeeds||{});state.Binance.socket=f.length===2&&f.every(x=>x.socket==="connected")?"connected":"reconnecting";state.Binance.error=f.map(x=>x.error).filter(Boolean).join(" | ").slice(0,240)},1000);
 
 // Bybit with orderbook delta merge
 const bb={BTC:{b:new Map(),a:new Map()},ETH:{b:new Map(),a:new Map()}};
@@ -254,4 +232,4 @@ const ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.
 </script></body></html>`));
 const wss=new WebSocketServer({server,path:"/ws"});wss.on("connection",ws=>{clients.add(ws);ws.on("close",()=>clients.delete(ws))});
 setInterval(()=>{const c=now()-86400000;while(trades.length&&trades[0].ts<c)trades.shift();while(liqs.length&&liqs[0].ts<c)liqs.shift()},60000);
-server.listen(PORT,"0.0.0.0",()=>console.log("WhaleScope v9.9 Binance explicit SUBSCRIBE on",PORT));
+server.listen(PORT,"0.0.0.0",()=>console.log("WhaleScope v10.0 verified Binance market aggTrade on",PORT));

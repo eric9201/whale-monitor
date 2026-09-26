@@ -206,20 +206,20 @@ if(hm.length){
   if(last) rows=rows.filter(x=>Math.abs(x.price-last)/last<=.30);
   rows.sort((a,b)=>b.price-a.price);
   if(!rows.length){$("heat").innerHTML="<div class=muted style='padding:18px'>目前此資金門檻沒有清算區。</div>";return;}
-  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),top=14,bottomPad=54,H=Math.max(330,rows.length*27+top+bottomPad),minGap=25; $("heat").style.height=Math.min(H,760)+"px"; $("heat").style.overflowY=H>760?"auto":"hidden";
+  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),top=18,bottomPad=58,minGap=46,H=Math.max(360,rows.length*minGap+top+bottomPad); $("heat").style.height=Math.min(H,760)+"px"; $("heat").style.overflowY=H>760?"auto":"hidden";
   // Preserve price ordering while enforcing enough vertical separation for mobile labels.
   let pmax=Math.max(...rows.map(x=>x.price)),pmin=Math.min(...rows.map(x=>x.price));
   let placed=[];
   for(let x of rows){
     let y=pmax===pmin?H/2:top+(pmax-x.price)/(pmax-pmin)*(H-2*top);
     if(placed.length && y-placed[placed.length-1].y<minGap)y=placed[placed.length-1].y+minGap;
-    if(y>H-bottomPad)y=H-bottomPad;
+    // H is sized from row count; never clamp multiple rows onto the same Y coordinate.
     placed.push({...x,y});
   }
   $("heat").innerHTML=placed.map(x=>{
     let w=Math.max(10,Math.min(94,94*x.estimatedUsd/maxH)),
         cls=x.side==="LONG"?"z zl":"z zs";
-    return "<div class='"+cls+"' style='position:absolute;left:0;top:"+x.y+"px;width:"+w+"%;height:22px;line-height:22px;padding-left:12px;white-space:nowrap;overflow:visible;z-index:2;font-size:14px;transform:none'>"+
+    return "<div class='"+cls+"' style='position:absolute;left:0;top:"+x.y+"px;width:"+w+"%;height:30px;line-height:30px;padding-left:12px;white-space:nowrap;overflow:visible;z-index:2;font-size:14px;transform:none'>"+
       x.side+" LIQ · $"+Math.round(x.price).toLocaleString()+" · "+M(x.estimatedUsd)+"</div>";
   }).join("")+(last?"<div style='position:absolute;left:0;right:0;top:50%;border-top:1px dashed #8fa7c7;opacity:.45;z-index:1'></div>":"");
 }else $("heat").innerHTML="<div class=muted style='padding:18px'>正在累積 OI Δ；至少需要兩次 OI snapshot 才會產生清算資金強度。</div>";

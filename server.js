@@ -206,22 +206,16 @@ if(hm.length){
   if(last) rows=rows.filter(x=>Math.abs(x.price-last)/last<=.30);
   rows.sort((a,b)=>b.price-a.price);
   if(!rows.length){$("heat").innerHTML="<div class=muted style='padding:18px'>目前此資金門檻沒有清算區。</div>";return;}
-  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),top=18,bottomPad=58,minGap=46,H=Math.max(360,rows.length*minGap+top+bottomPad); $("heat").style.height=Math.min(H,760)+"px"; $("heat").style.overflowY=H>760?"auto":"hidden";
-  // Preserve price ordering while enforcing enough vertical separation for mobile labels.
-  let pmax=Math.max(...rows.map(x=>x.price)),pmin=Math.min(...rows.map(x=>x.price));
-  let placed=[];
-  for(let x of rows){
-    let y=pmax===pmin?H/2:top+(pmax-x.price)/(pmax-pmin)*(H-2*top);
-    if(placed.length && y-placed[placed.length-1].y<minGap)y=placed[placed.length-1].y+minGap;
-    // H is sized from row count; never clamp multiple rows onto the same Y coordinate.
-    placed.push({...x,y});
-  }
-  $("heat").innerHTML=placed.map(x=>{
+  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),rowH=48,pad=14,H=Math.max(360,rows.length*rowH+pad*2);
+  $("heat").style.height=Math.min(H,760)+"px";
+  $("heat").style.overflowY=H>760?"auto":"hidden";
+  $("heat").innerHTML="<div style='position:relative;height:"+H+"px;padding:"+pad+"px 0'>"+rows.map((x,i)=>{
     let w=Math.max(10,Math.min(94,94*x.estimatedUsd/maxH)),
-        cls=x.side==="LONG"?"z zl":"z zs";
-    return "<div class='"+cls+"' style='position:absolute;left:0;top:"+x.y+"px;width:"+w+"%;height:30px;line-height:30px;padding-left:12px;white-space:nowrap;overflow:visible;z-index:2;font-size:14px;transform:none'>"+
+        cls=x.side==="LONG"?"z zl":"z zs",
+        y=pad+i*rowH;
+    return "<div class='"+cls+"' style='position:absolute;left:0;top:"+y+"px;width:"+w+"%;height:34px;line-height:34px;padding-left:12px;white-space:nowrap;overflow:visible;z-index:2;font-size:14px;transform:none'>"+
       x.side+" LIQ · $"+Math.round(x.price).toLocaleString()+" · "+M(x.estimatedUsd)+"</div>";
-  }).join("")+(last?"<div style='position:absolute;left:0;right:0;top:50%;border-top:1px dashed #8fa7c7;opacity:.45;z-index:1'></div>":"");
+  }).join("")+"</div>";
 }else $("heat").innerHTML="<div class=muted style='padding:18px'>正在累積 OI Δ；至少需要兩次 OI snapshot 才會產生清算資金強度。</div>";
 $("liq").innerHTML=D.liquidations.filter(x=>x.asset===A).slice(-30).reverse().map(x=>"<div style='padding:7px;border-bottom:1px solid #13243d'><b class="+(x.side==="BUY"?"g":"r")+">"+x.side+"</b> "+x.exchange+" <span style=float:right>"+M(x.usd)+" @ "+x.price.toLocaleString()+"</span></div>").join("")||"<div class=muted>等待 Binance / Bybit 公開強平事件…</div>";
 let by=D.marketDistribution?.[A]||{};let mx=Math.max(1,...Object.values(by));$("ven").innerHTML=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([e,v])=>"<div style='margin:9px 0'>"+e+" <span style=float:right>"+M(v)+"</span><div class=bar><i style='width:"+(v/mx*100)+"%'></i></div></div>").join("")||"<div class=muted>等待符合門檻成交…</div>";

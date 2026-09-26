@@ -184,7 +184,7 @@ app.get("/",(_,r)=>r.type("html").send(`<!doctype html><html lang="zh-Hant"><hea
 .lf{background:#09182a;color:#9fb0cb;border:1px solid #24466f;border-radius:7px;padding:7px 10px;font-weight:700}.lf.on{color:#fff;border-color:#8c62ff;box-shadow:0 0 10px #8c62ff55}</style></head><body><main><div class=head><div><div class=logo>◉ WhaleScope</div><div class=muted>Verified CEX + On-chain Intelligence</div></div><select id=a><option>BTC</option><option>ETH</option></select><span class=pill>INTEGRATED WHALE FLOW</span><b class=g>● <span id=live>CHECKING</span></b></div>
 <div class=cards><div class=card><div class=label>24H 巨鯨成交</div><div id=total class=big>$0</div></div><div class=card><div class=label>24H 主動買入</div><div id=buy class="big g">$0</div></div><div class=card><div class=label>24H 主動賣出</div><div id=sell class="big r">$0</div></div><div class=card><div class=label>資金淨流入</div><div id=net class="big p">$0</div></div></div>
 <div class=grid><div class=card><div class=title>巨鯨大額成交</div><div class=scroll><table><thead><tr><th>時間</th><th>方向</th><th>金額</th><th>來源</th></tr></thead><tbody id=tr></tbody></table></div></div><div class=card><div class=title>大戶掛單點位</div><div class=scroll><table><thead><tr><th>類型</th><th>價格</th><th>金額</th><th>來源</th></tr></thead><tbody id=wa></tbody></table></div></div></div>
-<div class=grid><div class=card><div class=title>預估清算資金熱圖</div><div class=liqfilters style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><button class="lf on" data-f="all">全部</button><button class=lf data-f="lt500">&lt; $500K</button><button class=lf data-f="ge500">≥ $500K</button><button class=lf data-f="lt1m">&lt; $1M</button><button class=lf data-f="ge1m">≥ $1M</button><button class=lf data-f="ge10m">≥ $10M</button></div><div id=heat class=heat></div><div class=muted>ESTIMATED LIQUIDATION HEATMAP：Binance / Bybit / OKX 公開 OI Δ 建模；槓桿僅在模型內計算，畫面整合為價格區間與預估清算資金強度。</div></div><div class=card><div class=title>實際公開強平</div><div id=liq class=scroll></div></div></div>
+<div class=grid><div class=card><div class=title>預估清算資金熱圖</div><div class=liqfilters style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><button class="lf on" data-f="all">全部</button><button class=lf data-f="lt500">&lt; $500K</button><button class=lf data-f="ge500">≥ $500K</button><button class=lf data-f="lt1m">&lt; $1M</button><button class=lf data-f="ge1m">≥ $1M</button><button class=lf data-f="ge10m">≥ $10M</button></div><div id=heat class=heat style="margin-bottom:14px"></div><div class=muted style="position:relative;z-index:3">ESTIMATED LIQUIDATION HEATMAP：Binance / Bybit / OKX 公開 OI Δ 建模；槓桿僅在模型內計算，畫面整合為價格區間與預估清算資金強度。</div></div><div class=card><div class=title>實際公開強平</div><div id=liq class=scroll></div></div></div>
 <div class=grid><div class=card><div class=title>交易所成交資金分布</div><div id=ven></div><div class=muted>只計入真正收到且成功解析的公開成交資料。</div></div><div class=card><div class=title>資料來源驗證</div><div id=src></div></div></div>
 <div class=card style="margin-top:10px"><div class=title>資金流向 · MONEY FLOW</div><div id=flow class=flow></div></div><div class=card style="margin-top:10px"><div class=title>FLOW LEAD/LAG · OOS 驗證</div><div class=muted>每 5 秒凍結當下 Flow，之後才補 15s / 30s / 1m / 3m / 5m forward return；不使用未來資料。</div><div id=flab class=scroll style="margin-top:8px"></div></div><div class=card style="margin-top:10px"><div class=title>清算反向 · PAPER TEST</div><div class=muted>規則：SHORT 清算資金較強 → 開多；LONG 清算資金較強 → 開空。進場時鎖定價格方向上最近的第一個反向清算價，價格觸及該目標才平倉；持倉期間不重複開倉。僅模擬、不送真實訂單。</div><div id=lpaper style="margin-top:8px"></div></div>
 </main><script>
@@ -206,14 +206,14 @@ if(hm.length){
   if(last) rows=rows.filter(x=>Math.abs(x.price-last)/last<=.30);
   rows.sort((a,b)=>b.price-a.price);
   if(!rows.length){$("heat").innerHTML="<div class=muted style='padding:18px'>目前此資金門檻沒有清算區。</div>";return;}
-  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),H=Math.max(330,rows.length*27+28),top=14,minGap=25; $("heat").style.height=Math.min(H,900)+"px"; $("heat").style.overflowY=H>900?"auto":"hidden";
+  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),top=14,bottomPad=54,H=Math.max(330,rows.length*27+top+bottomPad),minGap=25; $("heat").style.height=Math.min(H,760)+"px"; $("heat").style.overflowY=H>760?"auto":"hidden";
   // Preserve price ordering while enforcing enough vertical separation for mobile labels.
   let pmax=Math.max(...rows.map(x=>x.price)),pmin=Math.min(...rows.map(x=>x.price));
   let placed=[];
   for(let x of rows){
     let y=pmax===pmin?H/2:top+(pmax-x.price)/(pmax-pmin)*(H-2*top);
     if(placed.length && y-placed[placed.length-1].y<minGap)y=placed[placed.length-1].y+minGap;
-    if(y>H-16)y=H-16;
+    if(y>H-bottomPad)y=H-bottomPad;
     placed.push({...x,y});
   }
   $("heat").innerHTML=placed.map(x=>{

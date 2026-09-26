@@ -38,7 +38,7 @@ async function jget(u){let r=await fetch(u,{headers:{"user-agent":"WhaleScope/1.
 function mid(a){let p=[];for(let b of Object.values(books[a]||{})){if(b.bids?.[0]?.[0])p.push(+b.bids[0][0]);if(b.asks?.[0]?.[0])p.push(+b.asks[0][0])}return p.length?p.reduce((x,y)=>x+y,0)/p.length:0}
 function addHeat(a,side,px,usd,lev,src,ts){if(!(px>0&&usd>0))return;let step=a==="BTC"?50:5,b=Math.round(px/step)*step,k=side+":"+b,z=liqHeat[a].get(k)||{id:k,asset:a,side,price:b,estimatedUsd:0,firstSeen:ts,lastSeen:ts,sources:{},leverages:{}};z.estimatedUsd+=usd;z.lastSeen=ts;z.sources[src]=(z.sources[src]||0)+usd;z.leverages[lev]=(z.leverages[lev]||0)+usd;liqHeat[a].set(k,z)}
 function ingestOI(src,a,oi,px,ts=now()){let q=oiState[a][src];oiState[a][src]={oiUsd:oi,price:px,ts};if(!q||!(q.oiUsd>0)||ts-q.ts<1000)return;let d=oi-q.oiUsd;if(!(d>0))return;let side=px>=q.price?"LONG":"SHORT",w={10:.15,25:.30,50:.35,100:.20};for(let l of LEV){let lp=side==="LONG"?px*(1-1/l):px*(1+1/l);addHeat(a,side,lp,d*w[l],l,src,ts)}}
-function heat(a){let t=now();for(let[k,z]of liqHeat[a])if(t-z.lastSeen>HEAT_TTL)liqHeat[a].delete(k);return[...liqHeat[a].values()].sort((x,y)=>y.estimatedUsd-x.estimatedUsd).slice(0,100)}
+function heat(a){let t=now();for(let[k,z]of liqHeat[a])if(t-z.lastSeen>HEAT_TTL)liqHeat[a].delete(k);return[...liqHeat[a].values()].sort((x,y)=>y.estimatedUsd-x.estimatedUsd)}
 async function pollOI(){for(let a of["BTC","ETH"]){let sym=a+"USDT",px=mid(a);if(!px)continue;
 try{let x=await jget("https://fapi.binance.com/fapi/v1/openInterest?symbol="+sym);ingestOI("Binance",a,+x.openInterest*px,px,+x.time||now())}catch(e){}
 try{let x=await jget("https://api.bybit.com/v5/market/open-interest?category=linear&symbol="+sym+"&intervalTime=5min&limit=1"),v=x?.result?.list?.[0];if(v)ingestOI("Bybit",a,+v.openInterest*px,px,+v.timestamp||now())}catch(e){}
@@ -184,11 +184,11 @@ app.get("/",(_,r)=>r.type("html").send(`<!doctype html><html lang="zh-Hant"><hea
 .lf{background:#09182a;color:#9fb0cb;border:1px solid #24466f;border-radius:7px;padding:7px 10px;font-weight:700}.lf.on{color:#fff;border-color:#8c62ff;box-shadow:0 0 10px #8c62ff55}</style></head><body><main><div class=head><div><div class=logo>◉ WhaleScope</div><div class=muted>Verified CEX + On-chain Intelligence</div></div><select id=a><option>BTC</option><option>ETH</option></select><span class=pill>INTEGRATED WHALE FLOW</span><b class=g>● <span id=live>CHECKING</span></b></div>
 <div class=cards><div class=card><div class=label>24H 巨鯨成交</div><div id=total class=big>$0</div></div><div class=card><div class=label>24H 主動買入</div><div id=buy class="big g">$0</div></div><div class=card><div class=label>24H 主動賣出</div><div id=sell class="big r">$0</div></div><div class=card><div class=label>資金淨流入</div><div id=net class="big p">$0</div></div></div>
 <div class=grid><div class=card><div class=title>巨鯨大額成交</div><div class=scroll><table><thead><tr><th>時間</th><th>方向</th><th>金額</th><th>來源</th></tr></thead><tbody id=tr></tbody></table></div></div><div class=card><div class=title>大戶掛單點位</div><div class=scroll><table><thead><tr><th>類型</th><th>價格</th><th>金額</th><th>來源</th></tr></thead><tbody id=wa></tbody></table></div></div></div>
-<div class=grid><div class=card><div class=title>預估清算資金熱圖</div><div class=liqfilters style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><button class="lf on" data-f="all">全部</button><button class=lf data-f="lt500">&lt; $500K</button><button class=lf data-f="ge500">≥ $500K</button><button class=lf data-f="lt1m">&lt; $1M</button><button class=lf data-f="ge1m">≥ $1M</button></div><div id=heat class=heat></div><div class=muted>ESTIMATED LIQUIDATION HEATMAP：Binance / Bybit / OKX 公開 OI Δ 建模；槓桿僅在模型內計算，畫面整合為價格區間與預估清算資金強度。</div></div><div class=card><div class=title>實際公開強平</div><div id=liq class=scroll></div></div></div>
+<div class=grid><div class=card><div class=title>預估清算資金熱圖</div><div class=liqfilters style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px"><button class="lf on" data-f="all">全部</button><button class=lf data-f="lt500">&lt; $500K</button><button class=lf data-f="ge500">≥ $500K</button><button class=lf data-f="lt1m">&lt; $1M</button><button class=lf data-f="ge1m">≥ $1M</button><button class=lf data-f="ge10m">≥ $10M</button></div><div id=heat class=heat></div><div class=muted>ESTIMATED LIQUIDATION HEATMAP：Binance / Bybit / OKX 公開 OI Δ 建模；槓桿僅在模型內計算，畫面整合為價格區間與預估清算資金強度。</div></div><div class=card><div class=title>實際公開強平</div><div id=liq class=scroll></div></div></div>
 <div class=grid><div class=card><div class=title>交易所成交資金分布</div><div id=ven></div><div class=muted>只計入真正收到且成功解析的公開成交資料。</div></div><div class=card><div class=title>資料來源驗證</div><div id=src></div></div></div>
 <div class=card style="margin-top:10px"><div class=title>資金流向 · MONEY FLOW</div><div id=flow class=flow></div></div><div class=card style="margin-top:10px"><div class=title>FLOW LEAD/LAG · OOS 驗證</div><div class=muted>每 5 秒凍結當下 Flow，之後才補 15s / 30s / 1m / 3m / 5m forward return；不使用未來資料。</div><div id=flab class=scroll style="margin-top:8px"></div></div><div class=card style="margin-top:10px"><div class=title>清算反向 · PAPER TEST</div><div class=muted>規則：SHORT 清算資金較強 → 開多；LONG 清算資金較強 → 開空。進場時鎖定價格方向上最近的第一個反向清算價，價格觸及該目標才平倉；持倉期間不重複開倉。僅模擬、不送真實訂單。</div><div id=lpaper style="margin-top:8px"></div></div>
 </main><script>
-let D={trades:[],liquidations:[],books:{BTC:{},ETH:{}},health:{},walls:{BTC:[],ETH:[]},bursts:{BTC:{},ETH:{}},marketDistribution:{},liquidationMap:{}};let LIQ_FILTER="all";function liqFilterOk(x){let u=x.estimatedUsd||0;return LIQ_FILTER==="all"||(LIQ_FILTER==="lt500"&&u<5e5)||(LIQ_FILTER==="ge500"&&u>=5e5)||(LIQ_FILTER==="lt1m"&&u<1e6)||(LIQ_FILTER==="ge1m"&&u>=1e6)}function bindLiqFilters(){document.querySelectorAll(".lf").forEach(b=>b.onclick=()=>{LIQ_FILTER=b.dataset.f;document.querySelectorAll(".lf").forEach(x=>x.classList.toggle("on",x===b));draw()})}const $=x=>document.getElementById(x),M=n=>"$"+Intl.NumberFormat("en",{notation:"compact",maximumFractionDigits:2}).format(n||0);
+let D={trades:[],liquidations:[],books:{BTC:{},ETH:{}},health:{},walls:{BTC:[],ETH:[]},bursts:{BTC:{},ETH:{}},marketDistribution:{},liquidationMap:{}};let LIQ_FILTER="all";function liqFilterOk(x){let u=x.estimatedUsd||0;return LIQ_FILTER==="all"||(LIQ_FILTER==="lt500"&&u<5e5)||(LIQ_FILTER==="ge500"&&u>=5e5)||(LIQ_FILTER==="lt1m"&&u<1e6)||(LIQ_FILTER==="ge1m"&&u>=1e6)||(LIQ_FILTER==="ge10m"&&u>=1e7)}function bindLiqFilters(){document.querySelectorAll(".lf").forEach(b=>b.onclick=()=>{LIQ_FILTER=b.dataset.f;document.querySelectorAll(".lf").forEach(x=>x.classList.toggle("on",x===b));draw()})}const $=x=>document.getElementById(x),M=n=>"$"+Intl.NumberFormat("en",{notation:"compact",maximumFractionDigits:2}).format(n||0);
 function C(min,A){let x=D.trades.filter(v=>v.asset===A&&v.ts>Date.now()-min*60000),b=x.filter(v=>v.side==="BUY").reduce((s,v)=>s+v.usd,0),s=x.filter(v=>v.side==="SELL").reduce((q,v)=>q+v.usd,0);return{x,b,s,n:b-s}}
 function B(A,T,min=1440){return ((D.bursts?.[A]?.[String(T)])||[]).filter(x=>x.start>Date.now()-min*60000)}
 function dur(ms){let q=Math.max(0,Math.floor(ms/1000)),h=Math.floor(q/3600),m=Math.floor(q%3600/60),s=q%60;return(h?h+"h ":"")+(m?m+"m ":"")+s+"s"}
@@ -203,17 +203,17 @@ if(hm.length){
     q.estimatedUsd+=x.estimatedUsd||0; bins.set(k,q);
   }
   let rows=[...bins.values()].filter(liqFilterOk);
-  if(last) rows=rows.filter(x=>Math.abs(x.price-last)/last<=.15);
+  if(last) rows=rows.filter(x=>Math.abs(x.price-last)/last<=.30);
   rows.sort((a,b)=>b.price-a.price);
   if(!rows.length){$("heat").innerHTML="<div class=muted style='padding:18px'>目前此資金門檻沒有清算區。</div>";return;}
-  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),H=330,top=14,minGap=25;
+  let maxH=Math.max(1,...rows.map(x=>x.estimatedUsd)),H=Math.max(330,rows.length*27+28),top=14,minGap=25; $("heat").style.height=Math.min(H,900)+"px"; $("heat").style.overflowY=H>900?"auto":"hidden";
   // Preserve price ordering while enforcing enough vertical separation for mobile labels.
   let pmax=Math.max(...rows.map(x=>x.price)),pmin=Math.min(...rows.map(x=>x.price));
   let placed=[];
   for(let x of rows){
     let y=pmax===pmin?H/2:top+(pmax-x.price)/(pmax-pmin)*(H-2*top);
     if(placed.length && y-placed[placed.length-1].y<minGap)y=placed[placed.length-1].y+minGap;
-    if(y>H-16)continue;
+    if(y>H-16)y=H-16;
     placed.push({...x,y});
   }
   $("heat").innerHTML=placed.map(x=>{
